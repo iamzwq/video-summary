@@ -1102,6 +1102,16 @@
 		};
 	}
 	var lastTitle = "";
+	var hydrated = false;
+	function isHydrated() {
+		if (hydrated) return true;
+		if (document.readyState !== "complete") return false;
+		const app = _unsafeWindow.document.querySelector("#app");
+		const nav = performance.getEntriesByType("navigation")[0];
+		const sinceLoad = nav?.loadEventEnd ? performance.now() - nav.loadEventEnd : 0;
+		hydrated = Boolean(app?.__vue__ || app?.__vue_app__) || sinceLoad > 3e3;
+		return hydrated;
+	}
 	async function getVideoInfo(ref) {
 		const json = await fetchJson(`https://api.bilibili.com/x/web-interface/view?${/^av/i.test(ref.id) ? `aid=${ref.id.slice(2)}` : `bvid=${ref.id}`}`);
 		if (json.code !== 0) throw new Error(`获取视频信息失败：${json.message ?? json.code}`);
@@ -1157,6 +1167,7 @@
 			return lastTitle || document.querySelector("h1.video-title, .video-title")?.textContent?.trim() || document.title;
 		},
 		mountButton(btn) {
+			if (!isHydrated()) return false;
 			for (const selector of TOOLBAR_SELECTORS) {
 				const container = document.querySelector(selector);
 				if (container) {

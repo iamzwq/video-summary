@@ -1,3 +1,4 @@
+import { unsafeWindow } from '$';
 import type { Cue, SiteAdapter, Track, TrackList } from '../types';
 import { fetchJson, sleep } from '../utils';
 import { signWbi } from './bilibili-wbi';
@@ -29,6 +30,18 @@ function parseLocation(): VideoRef | null {
 }
 
 let lastTitle = '';
+let hydrated = false;
+
+// Touching SSR markup before Vue hydrates makes it re-render #app, which wipes the separately mounted #biliMainHeader.
+function isHydrated(): boolean {
+  if (hydrated) return true;
+  if (document.readyState !== 'complete') return false;
+  const app = unsafeWindow.document.querySelector('#app') as any;
+  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  const sinceLoad = nav?.loadEventEnd ? performance.now() - nav.loadEventEnd : 0;
+  hydrated = Boolean(app?.__vue__ || app?.__vue_app__) || sinceLoad > 3000;
+  return hydrated;
+}
 
 async function getVideoInfo(ref: VideoRef) {
   const query = /^av/i.test(ref.id) ? `aid=${ref.id.slice(2)}` : `bvid=${ref.id}`;
@@ -93,6 +106,7 @@ export const bilibili: SiteAdapter = {
   },
 
   mountButton(btn) {
+    if (!isHydrated()) return false;
     for (const selector of TOOLBAR_SELECTORS) {
       const container = document.querySelector(selector);
       if (container) {
