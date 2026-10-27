@@ -1,0 +1,18 @@
+{
+  "name": "video-summary",
+  "version": "0.1.0",
+  "description": "油猴脚本：B站 / YouTube 视频字幕 AI 中文总结",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "typecheck": "tsc"
+  },
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-plugin-monkey": "^8.1.1"
+  },
+  "private": true
+}
