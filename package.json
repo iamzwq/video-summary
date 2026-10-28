@@ -1,6 +1,6 @@
 {
   "name": "video-summary",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "油猴脚本：B站 / YouTube 视频字幕 AI 中文总结",
   "scripts": {
     "dev": "vite",
