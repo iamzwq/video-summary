@@ -19,6 +19,18 @@ export function pickDefaultTrack(tracks: Track[], originalLang?: string): Track 
     .track;
 }
 
+export function cuesToSrt(cues: Cue[]): string {
+  const ts = (sec: number) => {
+    const ms = Math.max(0, Math.round(sec * 1000));
+    const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+    return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor(ms / 60000) % 60)}:${pad(Math.floor(ms / 1000) % 60)},${pad(ms % 1000, 3)}`;
+  };
+  return [...cues]
+    .sort((a, b) => a.start - b.start)
+    .map((c, i) => `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${c.text.trim()}\n`)
+    .join('\n');
+}
+
 export function trackLabel(track: Track): string {
   return `${track.isAuto ? '自动生成' : '手动字幕'} · ${track.label}`;
 }

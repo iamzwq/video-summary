@@ -1,7 +1,7 @@
 import { getCached, setCached } from './cache';
 import { summarize } from './llm';
 import { getSettings, isConfigured } from './settings';
-import { cuesToLines, pickDefaultTrack, trackLabel } from './subtitle';
+import { cuesToLines, cuesToSrt, pickDefaultTrack, trackLabel } from './subtitle';
 import type { SiteAdapter, TrackList } from './types';
 import { Panel } from './ui/panel';
 import { createUiRoot } from './ui/root';
@@ -30,6 +30,7 @@ export class Controller {
       onGenerate: (force) => this.run({ force }),
       onTrackChange: (trackId) => this.run({ trackId }),
       onStop: () => this.stop(),
+      onDownload: () => this.download(),
       onSeek: (seconds) => {
         const video = this.adapter.getVideo();
         if (!video) return;
@@ -89,6 +90,36 @@ export class Controller {
     return list;
   }
 
+  private async download(): Promise<void> {
+    const key = this.adapter.getVideoKey();
+    const panel = this.panel;
+    if (!key || !panel) return;
+    try {
+      const list = await this.getTrackList(key);
+      if (!list.tracks.length) {
+        panel.flash('该视频没有可用字幕');
+        return;
+      }
+      const wanted = this.selectedTrack.get(key);
+      const track = list.tracks.find((t) => t.id === wanted) ?? pickDefaultTrack(list.tracks, list.originalLang);
+      panel.flash('正在下载字幕…');
+      const cues = await track.load();
+      if (!cues.length) throw new Error('字幕内容为空');
+      const name = `${this.adapter.getTitle() || key} [${track.label}]`.replace(/[\\/:*?"<>|\r\n]+/g, '_').slice(0, 150);
+      const url = URL.createObjectURL(new Blob(['\ufeff' + cuesToSrt(cues)], { type: 'text/plain;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name}.srt`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      panel.flash('字幕已下载');
+    } catch (e) {
+      panel.flash(`下载失败：${errorMessage(e)}`);
+    }
+  }
+
   async run(opts: { force?: boolean; trackId?: string } = {}): Promise<void> {
     const key = this.adapter.getVideoKey();
     if (!key) return;
@@ -119,7 +150,8 @@ export class Controller {
       panel.setTracks(list.tracks, track.id);
 
       const cacheKey = `${key}|${track.id}`;
-      const cached = opts.force ? undefined : getCached(cacheKey);
+      const cacheSize = getSettings().cacheSize;
+      const cached = opts.force ? undefined : getCached(cacheKey, cacheSize);
       if (cached) {
         panel.showMarkdown(cached.md);
         panel.setStatus(`已缓存（${new Date(cached.t).toLocaleString()}），可点击右上角重新生成`);
@@ -150,7 +182,7 @@ export class Controller {
       });
       if (!alive()) return;
       panel.showMarkdown(md);
-      setCached(cacheKey, md);
+      setCached(cacheKey, md, settings.cacheSize);
       panel.setStatus(`已完成 · ${trackLabel(track)}`);
     } catch (e) {
       if (!alive() || isAbortError(e)) return;

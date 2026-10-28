@@ -30,17 +30,17 @@
 	var _GM_xmlhttpRequest = (() => typeof GM_xmlhttpRequest != "undefined" ? GM_xmlhttpRequest : void 0)();
 	var _unsafeWindow = (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
 	var KEY$1 = "summaryCache";
-	var MAX = 50;
-	function getCached(key) {
+	function getCached(key, max) {
+		if (max <= 0) return void 0;
 		return _GM_getValue(KEY$1, {})[key];
 	}
-	function setCached(key, md) {
+	function setCached(key, md, max) {
 		const all = _GM_getValue(KEY$1, {});
 		all[key] = {
 			md,
 			t: Date.now()
 		};
-		const stale = Object.keys(all).sort((a, b) => all[b].t - all[a].t).slice(MAX);
+		const stale = Object.keys(all).sort((a, b) => all[b].t - all[a].t).slice(Math.max(0, max));
 		for (const k of stale) delete all[k];
 		_GM_setValue(KEY$1, all);
 	}
@@ -123,6 +123,14 @@
 			track,
 			index
 		})).sort((a, b) => Number(a.track.isAuto) - Number(b.track.isAuto) || rank(a.track) - rank(b.track) || a.index - b.index)[0].track;
+	}
+	function cuesToSrt(cues) {
+		const ts = (sec) => {
+			const ms = Math.max(0, Math.round(sec * 1e3));
+			const pad = (n, w = 2) => String(n).padStart(w, "0");
+			return `${pad(Math.floor(ms / 36e5))}:${pad(Math.floor(ms / 6e4) % 60)}:${pad(Math.floor(ms / 1e3) % 60)},${pad(ms % 1e3, 3)}`;
+		};
+		return [...cues].sort((a, b) => a.start - b.start).map((c, i) => `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${c.text.trim()}\n`).join("\n");
 	}
 	function trackLabel(track) {
 		return `${track.isAuto ? "自动生成" : "手动字幕"} · ${track.label}`;
@@ -289,6 +297,7 @@
 		thinking: "disabled",
 		reasoningEffort: "minimal",
 		chunkTokens: 12e3,
+		cacheSize: 20,
 		prompt: DEFAULT_PROMPT
 	};
 	var KEY = "settings";
@@ -364,7 +373,12 @@
 			"M17 16h6"
 		],
 		close: ["M18 6 6 18", "M6 6l12 12"],
-		stop: ["M7 7h10v10H7z"]
+		stop: ["M7 7h10v10H7z"],
+		download: [
+			"M12 4v11",
+			"M7 10l5 5 5-5",
+			"M5 20h14"
+		]
 	};
 	var TIME = String.raw`(?:\d{1,2}:)?\d{1,2}:\d{2}`;
 	var INLINE = new RegExp(String.raw`(\*\*[^*\n]+?\*\*|\x60[^\x60\n]+\x60|\[${TIME}(?:\s*[-–~]\s*${TIME})?\])`, "g");
@@ -514,7 +528,7 @@
 			this.body = h("div", { class: "vs-body" }, this.content);
 			this.toast = h("div", { class: "vs-toast" });
 			this.toast.hidden = true;
-			const header = h("div", { class: "vs-header" }, icon(ICONS.summary, 18), h("span", { class: "vs-title" }, "视频总结"), iconBtn("重新生成", ICONS.refresh, () => cb.onGenerate(true)), iconBtn("复制 Markdown", ICONS.copy, () => this.copy()), iconBtn("设置", ICONS.settings, () => this.showSettings()), iconBtn("关闭", ICONS.close, () => this.close()));
+			const header = h("div", { class: "vs-header" }, icon(ICONS.summary, 18), h("span", { class: "vs-title" }, "视频总结"), iconBtn("重新生成", ICONS.refresh, () => cb.onGenerate(true)), iconBtn("复制 Markdown", ICONS.copy, () => this.copy()), iconBtn("下载字幕（SRT）", ICONS.download, () => cb.onDownload()), iconBtn("设置", ICONS.settings, () => this.showSettings()), iconBtn("关闭", ICONS.close, () => this.close()));
 			this.el = h("div", { class: "vs-panel" }, header, h("div", { class: "vs-bar" }, this.select, this.stopBtn), this.status, this.body, this.toast);
 			this.el.hidden = true;
 			for (const type of [
@@ -594,6 +608,10 @@
 				min: "2000",
 				step: "1000"
 			});
+			const cacheSize = input("number", s.cacheSize, {
+				min: "0",
+				step: "1"
+			});
 			const select = (value, options) => {
 				const el = h("select", {}, ...options.map(([v, label]) => h("option", { value: v }, label)));
 				el.value = value;
@@ -621,6 +639,7 @@
 				thinking: thinking.value,
 				reasoningEffort: reasoningEffort.value,
 				chunkTokens: Math.max(2e3, Number(chunkTokens.value) || DEFAULT_SETTINGS.chunkTokens),
+				cacheSize: cacheSize.value.trim() === "" || !Number.isFinite(Number(cacheSize.value)) ? DEFAULT_SETTINGS.cacheSize : Math.max(0, Math.floor(Number(cacheSize.value))),
 				prompt: prompt.value.trim() || "你是一名专业的视频内容分析助手。用户会提供视频标题和带时间戳的字幕（字幕可能是任意语言，也可能是语音自动识别生成、含有错别字）。请基于字幕内容输出结构化总结，要求：\n\n1. 无论字幕是什么语言，输出必须使用简体中文；专有名词可保留原文并在括号中注明。\n2. 使用 Markdown，严格按以下结构输出，不要添加开场白或结束语：\n\n## 一句话总结\n（一句话概括视频主旨）\n\n## 核心要点\n（3~8 条无序列表，每条简洁具体）\n\n## 章节大纲\n（按时间顺序的无序列表，每行格式为：- [mm:ss] 章节标题：要点。时间戳必须取自字幕中真实存在的时间）\n\n## 关键结论\n（视频得出的结论、建议或值得记住的观点）\n\n3. 忠于字幕原文，不编造字幕中没有的信息；忽略广告、赞助口播和无意义的语气词。"
 			});
 			const setMsg = (text, kind = "") => {
@@ -628,7 +647,7 @@
 				msg.textContent = text;
 			};
 			const back = () => this.showView(this.content);
-			const form = h("div", { class: "vs-form" }, note ? h("div", { class: "vs-note" }, note) : null, field("Base URL（OpenAI 兼容接口）", baseURL), field("API Key", apiKey), h("div", { class: "vs-row" }, field("模型", model), field("Temperature", temperature)), h("div", { class: "vs-row" }, field("深度思考", thinking), field("思考程度", reasoningEffort)), h("div", { class: "vs-hint" }, "「深度思考」发送 thinking.type（豆包 / GLM / DeepSeek 等），「思考程度」发送 reasoning_effort（OpenAI / 豆包等）。总结视频一般无需深度思考，关闭更快更省 token。"), field("分段阈值（估算 token，超过后分段总结）", chunkTokens), field("系统提示词", prompt), msg, h("div", { class: "vs-actions-row" }, h("button", {
+			const form = h("div", { class: "vs-form" }, note ? h("div", { class: "vs-note" }, note) : null, field("Base URL（OpenAI 兼容接口）", baseURL), field("API Key", apiKey), h("div", { class: "vs-row" }, field("模型", model), field("Temperature", temperature)), h("div", { class: "vs-row" }, field("深度思考", thinking), field("思考程度", reasoningEffort)), h("div", { class: "vs-hint" }, "「深度思考」发送 thinking.type（豆包 / GLM / DeepSeek 等），「思考程度」发送 reasoning_effort（OpenAI / 豆包等）。总结视频一般无需深度思考，关闭更快更省 token。"), h("div", { class: "vs-row" }, field("分段阈值（估算 token）", chunkTokens), field("缓存条数（0 为不缓存）", cacheSize)), field("系统提示词", prompt), msg, h("div", { class: "vs-actions-row" }, h("button", {
 				class: "vs-btn primary",
 				type: "button",
 				onclick: () => {
@@ -756,6 +775,7 @@
 				onGenerate: (force) => this.run({ force }),
 				onTrackChange: (trackId) => this.run({ trackId }),
 				onStop: () => this.stop(),
+				onDownload: () => this.download(),
 				onSeek: (seconds) => {
 					const video = this.adapter.getVideo();
 					if (!video) return;
@@ -806,6 +826,35 @@
 			}
 			return list;
 		}
+		async download() {
+			const key = this.adapter.getVideoKey();
+			const panel = this.panel;
+			if (!key || !panel) return;
+			try {
+				const list = await this.getTrackList(key);
+				if (!list.tracks.length) {
+					panel.flash("该视频没有可用字幕");
+					return;
+				}
+				const wanted = this.selectedTrack.get(key);
+				const track = list.tracks.find((t) => t.id === wanted) ?? pickDefaultTrack(list.tracks, list.originalLang);
+				panel.flash("正在下载字幕…");
+				const cues = await track.load();
+				if (!cues.length) throw new Error("字幕内容为空");
+				const name = `${this.adapter.getTitle() || key} [${track.label}]`.replace(/[\\/:*?"<>|\r\n]+/g, "_").slice(0, 150);
+				const url = URL.createObjectURL(new Blob(["﻿" + cuesToSrt(cues)], { type: "text/plain;charset=utf-8" }));
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = `${name}.srt`;
+				document.body.append(a);
+				a.click();
+				a.remove();
+				setTimeout(() => URL.revokeObjectURL(url), 1e4);
+				panel.flash("字幕已下载");
+			} catch (e) {
+				panel.flash(`下载失败：${errorMessage(e)}`);
+			}
+		}
 		async run(opts = {}) {
 			const key = this.adapter.getVideoKey();
 			if (!key) return;
@@ -832,7 +881,8 @@
 				this.selectedTrack.set(key, track.id);
 				panel.setTracks(list.tracks, track.id);
 				const cacheKey = `${key}|${track.id}`;
-				const cached = opts.force ? void 0 : getCached(cacheKey);
+				const cacheSize = getSettings().cacheSize;
+				const cached = opts.force ? void 0 : getCached(cacheKey, cacheSize);
 				if (cached) {
 					panel.showMarkdown(cached.md);
 					panel.setStatus(`已缓存（${new Date(cached.t).toLocaleString()}），可点击右上角重新生成`);
@@ -860,7 +910,7 @@
 				});
 				if (!alive()) return;
 				panel.showMarkdown(md);
-				setCached(cacheKey, md);
+				setCached(cacheKey, md, settings.cacheSize);
 				panel.setStatus(`已完成 · ${trackLabel(track)}`);
 			} catch (e) {
 				if (!alive() || isAbortError(e)) return;

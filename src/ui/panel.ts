@@ -12,6 +12,7 @@ export interface PanelCallbacks {
   onGenerate(force: boolean): void;
   onTrackChange(trackId: string): void;
   onStop(): void;
+  onDownload(): void;
   onSeek(seconds: number): void;
   onSettingsSaved(): void;
 }
@@ -64,6 +65,7 @@ export class Panel {
       h('span', { class: 'vs-title' }, '视频总结'),
       iconBtn('重新生成', ICONS.refresh, () => cb.onGenerate(true)),
       iconBtn('复制 Markdown', ICONS.copy, () => this.copy()),
+      iconBtn('下载字幕（SRT）', ICONS.download, () => cb.onDownload()),
       iconBtn('设置', ICONS.settings, () => this.showSettings()),
       iconBtn('关闭', ICONS.close, () => this.close()),
     );
@@ -161,6 +163,7 @@ export class Panel {
     const model = input('text', s.model, { placeholder: DEFAULT_SETTINGS.model });
     const temperature = input('number', s.temperature, { min: '0', max: '2', step: '0.1' });
     const chunkTokens = input('number', s.chunkTokens, { min: '2000', step: '1000' });
+    const cacheSize = input('number', s.cacheSize, { min: '0', step: '1' });
     const select = (value: string, options: [string, string][]) => {
       const el = h('select', {}, ...options.map(([v, label]) => h('option', { value: v }, label)));
       el.value = value;
@@ -189,6 +192,10 @@ export class Panel {
       thinking: thinking.value as ThinkingMode,
       reasoningEffort: reasoningEffort.value as ReasoningEffort,
       chunkTokens: Math.max(2000, Number(chunkTokens.value) || DEFAULT_SETTINGS.chunkTokens),
+      cacheSize:
+        cacheSize.value.trim() === '' || !Number.isFinite(Number(cacheSize.value))
+          ? DEFAULT_SETTINGS.cacheSize
+          : Math.max(0, Math.floor(Number(cacheSize.value))),
       prompt: prompt.value.trim() || DEFAULT_PROMPT,
     });
     const setMsg = (text: string, kind: '' | 'ok' | 'error' = '') => {
@@ -210,7 +217,12 @@ export class Panel {
         { class: 'vs-hint' },
         '「深度思考」发送 thinking.type（豆包 / GLM / DeepSeek 等），「思考程度」发送 reasoning_effort（OpenAI / 豆包等）。总结视频一般无需深度思考，关闭更快更省 token。',
       ),
-      field('分段阈值（估算 token，超过后分段总结）', chunkTokens),
+      h(
+        'div',
+        { class: 'vs-row' },
+        field('分段阈值（估算 token）', chunkTokens),
+        field('缓存条数（0 为不缓存）', cacheSize),
+      ),
       field('系统提示词', prompt),
       msg,
       h(
@@ -267,7 +279,7 @@ export class Panel {
     this.flash('已复制 Markdown');
   }
 
-  private flash(text: string): void {
+  flash(text: string): void {
     this.toast.textContent = text;
     this.toast.hidden = false;
     clearTimeout(this.toastTimer);

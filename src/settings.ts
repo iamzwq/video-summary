@@ -14,6 +14,8 @@ export interface Settings {
   /** Sent as `reasoning_effort` (OpenAI / Doubao style). */
   reasoningEffort: ReasoningEffort;
   chunkTokens: number;
+  /** Max number of cached summaries; 0 disables caching. */
+  cacheSize: number;
   prompt: string;
 }
 
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   thinking: 'disabled',
   reasoningEffort: 'minimal',
   chunkTokens: 12000,
+  cacheSize: 20,
   prompt: DEFAULT_PROMPT,
 };
 

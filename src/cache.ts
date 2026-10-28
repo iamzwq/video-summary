@@ -6,18 +6,19 @@ interface Entry {
 }
 
 const KEY = 'summaryCache';
-const MAX = 50;
 
-export function getCached(key: string): Entry | undefined {
+export function getCached(key: string, max: number): Entry | undefined {
+  if (max <= 0) return undefined;
   return GM_getValue<Record<string, Entry>>(KEY, {})[key];
 }
 
-export function setCached(key: string, md: string): void {
+/** Keeps the newest `max` entries; `max <= 0` clears the cache. */
+export function setCached(key: string, md: string, max: number): void {
   const all = GM_getValue<Record<string, Entry>>(KEY, {});
   all[key] = { md, t: Date.now() };
   const stale = Object.keys(all)
     .sort((a, b) => all[b].t - all[a].t)
-    .slice(MAX);
+    .slice(Math.max(0, max));
   for (const k of stale) delete all[k];
   GM_setValue(KEY, all);
 }
