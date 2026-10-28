@@ -15,6 +15,8 @@ export default defineConfig({
         noframes: true,
         'run-at': 'document-start',
         connect: ['*'],
+        downloadURL: 'https://github.com/iamzwq/video-summary/releases/latest/download/video-summary.user.js',
+        updateURL: 'https://github.com/iamzwq/video-summary/releases/latest/download/video-summary.user.js',
       },
       build: {
         fileName: 'video-summary.user.js',

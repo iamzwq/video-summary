@@ -4,15 +4,18 @@
 
 ## 安装
 
-1. 在浏览器中安装油猴扩展 [Tampermonkey](https://www.tampermonkey.net/)。
-2. 下载本项目中的 [`dist/video-summary.user.js`](dist/video-summary.user.js)。
-3. 将脚本添加到油猴，任选一种方式：
+1. 在浏览器中安装油猴扩展 [Tampermonkey](https://www.tampermonkey.net/)（或 Violentmonkey）。
+2. 点击安装最新版脚本：**[video-summary.user.js](https://github.com/iamzwq/video-summary/releases/latest/download/video-summary.user.js)**，在弹出的油猴安装页点击「安装」即可。
+   - 也可以前往 [Releases](https://github.com/iamzwq/video-summary/releases) 页面，在对应版本的 Assets 中点击 `video-summary.user.js`。
+3. 如果点击后没有弹出安装页，而是直接下载了文件，可任选一种方式手动添加：
    - 把 `video-summary.user.js` 文件直接拖进浏览器窗口，在弹出的安装页点击「安装」；
    - 或打开 Tampermonkey 管理面板 →「实用工具」→「导入」，选择该文件；
    - 或在 Tampermonkey 中「添加新脚本」，将文件内容全部粘贴进去并保存。
 4. 首次生成总结时，如果 Tampermonkey 弹出跨域访问确认，请选择「总是允许」。
 
 > 使用 Chrome / Edge 时，如果脚本不生效，请在扩展管理页为 Tampermonkey 打开「允许用户脚本」（或开发者模式）。
+>
+> 更新脚本：重新点击上面的安装链接，即可覆盖安装最新版本。
 
 ## 支持的页面
 
@@ -27,7 +30,7 @@
 3. 总结会显示在页面右侧的浮动面板中：
    - 点击总结里的时间戳（如 `[03:25]`）可以跳转到视频对应位置；
    - 顶部下拉框可以切换字幕轨道；
-   - 右上角按钮依次为：重新生成、复制 Markdown、设置、关闭；
+   - 右上角按钮依次为：重新生成、复制 Markdown、下载字幕（SRT）、设置、关闭；
    - 生成过程中可以点击「停止」中断；
    - 面板标题栏可以拖动。
 
@@ -50,6 +53,7 @@
 | 深度思考 | 关闭（默认）/ 开启 / 自动 |
 | 思考程度 | minimal（默认）/ low / medium / high |
 | 分段阈值 | 字幕过长时分段总结的阈值，默认 12000 |
+| 缓存条数 | 最多缓存的总结条数，默认 20，设为 0 则不缓存 |
 | 系统提示词 | 可自定义总结格式，支持一键恢复默认 |
 
 填写完成后可以点击「测试连接」确认接口可用。
